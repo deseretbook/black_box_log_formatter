@@ -22,7 +22,7 @@ module BlackBox
       @appname = nil # App name at last time of app name color calculation
       @color = color == true || (
         color != false &&
-        (!logger || logger.instance_variable_get(:@filename)) &&
+        (!logger || !logger.instance_variable_get(:@filename)) &&
         !!(ENV['TERM'].to_s.downcase =~ /(linux|mac|xterm|ansi|putty|screen)/)
       )
 
