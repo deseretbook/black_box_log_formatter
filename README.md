@@ -68,9 +68,6 @@ Add this line to your application's Gemfile:
 
 ```ruby
 gem 'black_box_log_formatter'
-
-# Optionally add AwesomePrint for better event formatting
-gem 'awesome_print'
 ```
 
 ## Usage
@@ -83,7 +80,6 @@ unfiltered fields in the event.
 Pass primary metadata fields using symbols as keys, not strings.
 
 ```ruby
-require 'awesome_print'
 require 'black_box_log_formatter'
 
 l = Logger.new($stdout)
