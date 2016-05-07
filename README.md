@@ -17,8 +17,25 @@ about implementation details.
 
 ## Features
 
-- Each process, thread, worker, and job gets its own color, so you can visually
-  identify log messages from the same process, thread, or worker.
+- Each application name, process, thread, worker, and job gets its own color,
+  so you can visually identify log messages from the same process, thread, or
+  worker in a combined log stream.  You need to manually add these metadata
+  fields to your log events if your logger doesn't do it for you.
+
+  ```ruby
+  threads = []
+  10.times do |i|
+    threads << Thread.new do
+      l.info message: "On thread #{i}", tid: Thread.current.__id__
+      sleep rand
+      l.info message: "Back on #{i}", tid: Thread.current.__id__
+    end
+  end ; threads.each(&:join)
+  ```
+
+  ![Colorized thread IDs](screenshots/colorized_threads.png?raw=true)
+
+
 - Log events are colored according to severity:
   - DEBUG - dark gray
   - INFO - default
