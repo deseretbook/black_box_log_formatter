@@ -2,7 +2,7 @@
 # compatible with AwesomePrint's HTML output.
 # (C)2016 Deseret Book, created April 2016 by Mike Bourgeous/DeseretBook.com
 
-begin require 'awesome_print'; rescue LoadError; end
+require 'awesome_print'
 
 module BlackBox
   module AwesomeBacktrace
@@ -62,4 +62,4 @@ module BlackBox
   end
 end
 
-AwesomePrint::Formatter.send(:include, BlackBox::AwesomeBacktrace) if defined?(AwesomePrint::Formatter)
+AwesomePrint::Formatter.send(:include, BlackBox::AwesomeBacktrace)
