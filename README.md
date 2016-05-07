@@ -26,6 +26,15 @@ about implementation details.
   - ERROR - red
   - FATAL - magenta
   - UNKNOWN - cyan
+
+  ```ruby
+  [:debug, :info, :warn, :error, :fatal, :unknown].each do |level|
+    l.send(level, { message: "Message at #{level}", a: 1, b: 2, colors: true })
+  end
+  ```
+
+  ![Colorized log levels](screenshots/colorized_levels.png?raw=true)
+
 - Backtraces are colorized to make it easy to identify files, line numbers, and
   method names:
 
