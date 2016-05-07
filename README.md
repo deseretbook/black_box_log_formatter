@@ -26,6 +26,14 @@ about implementation details.
   - ERROR - red
   - FATAL - magenta
   - UNKNOWN - cyan
+- Backtraces are colorized to make it easy to identify files, line numbers, and
+  method names:
+
+  ```ruby
+  l.warn trace: caller
+  ```
+
+  ![Highlighted backtrace](screenshots/colorized_backtraces.png?raw=true)
 
 
 ## Installation

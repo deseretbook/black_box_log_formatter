@@ -1,3 +1,6 @@
+# Colorized, structured variant of Ruby's built-in Logger::Formatter.
+# (C)2016 Deseret Book, created September 2014 by Mike Bourgeous/DeseretBook.com
+
 require 'logger'
 require 'digest/md5'
 require 'socket'
@@ -93,8 +96,6 @@ module BlackBox
       if add_metadata
         msg = "#{format_tags(tags)}#{msg}"
       end
-
-      # TODO: Support highlighting of backtraces
 
       if event.any?
         begin
