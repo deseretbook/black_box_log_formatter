@@ -45,7 +45,10 @@ module BlackBox
       close_quote = colorize(close_quote, :string) if close_quote
 
       s = "[\n"
-      s << object.map{|s| "#{indent}#{open_quote}#{AwesomeBacktrace.format_line(s)}#{close_quote},\n" }.join
+      s << object.map{|s|
+        s = AwesomeBacktrace.format_line(s) unless @options[:plain] || !@inspector.colorize?
+        "#{indent}#{open_quote}#{s}#{close_quote},\n"
+      }.join
       s << "#{outdent}]"
 
       s
