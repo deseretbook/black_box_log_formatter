@@ -4,10 +4,55 @@
 require 'logger'
 require 'digest/md5'
 require 'socket'
+require 'lru_redux'
 
 module BlackBox
   # Colorized, structured variant of Ruby's built-in Logger::Formatter.
   class LogFormatter < ::Logger::Formatter
+    COLORS = {
+      severity: {
+        'DEBUG' => "\e[1;30m",
+        'INFO' => "\e[1;34m",
+        'WARN' => "\e[1;33m",
+        'ERROR' => "\e[1;31m",
+        'FATAL' => "\e[1;35m",
+        'ANY' => "\e[1;36m",
+        nil => "\e[1;36m",
+      },
+      message: {
+        'DEBUG' => "\e[1;30m",
+        'INFO' => "\e[0m",
+        'WARN' => "\e[0;33m",
+        'ERROR' => "\e[0;31m",
+        'FATAL' => "\e[0;35m",
+        'ANY' => "\e[0;36m",
+        nil => "\e[0;36m",
+      },
+      date: "\e[0;36m",
+      process: ->(param){
+        "\e[0;#{31 + digest(param) % 6}m"
+      },
+      progname: ->(param) {
+        "\e[1;#{31 + digest(param) % 6}m"
+      },
+      env: ->(param){
+        "\e[0;#{31 + digest(param) % 6}m"
+      },
+      host: ->(param){
+        "\e[1;#{31 + digest(param) % 6}m"
+      },
+      separator: "\e[0;1;30m",
+
+      nil => ->(param){
+        color = digest(param) % 15 + 1
+        if color > 7
+          "\e[0;1;#{30 + color - 8}m"
+        else
+          "\e[0;#{30 + color}m"
+        end
+      },
+    }
+
     # Whether to highlight log lines in color.
     attr_accessor :color
 
@@ -20,9 +65,8 @@ module BlackBox
     # enabled or disabled regardless of the attached logger's target or the
     # TERM environment variable.
     def initialize(logger: nil, color: nil)
-      @pidcol = nil
-      @appcol = nil
-      @appname = nil # App name at last time of app name color calculation
+      @cache = LruRedux::Cache.new(50)
+
       @color = color == true || (
         color != false &&
         (!logger || !logger.instance_variable_get(:@filename)) &&
@@ -33,16 +77,13 @@ module BlackBox
     end
 
     def call(severity, datetime, progname, msg)
-      # FIXME: Add inline metadata (TID, WID, JID) even if color is disabled
-      return super(severity, datetime, progname, self.class.format(msg, true, false)) unless @color
-
-      sc = severity_color(severity)
-      dc = date_color(severity)
-      pc = process_color(severity)
-      mc = message_color(severity)
-      ac = appname_color(severity, progname)
-      ec = env_color(progname)
-      rc = "\e[0;1;30m"
+      sc = find_color(:severity, severity)
+      dc = find_color(:date)
+      pc = find_color(:process, $$)
+      mc = find_color(:message, severity)
+      ac = find_color(:progname, progname)
+      ec = find_color(:env, progname)
+      rc = find_color(:separator)
 
       pid = "#{pc}##{$$}"
       host = Socket.gethostname
@@ -54,16 +95,16 @@ module BlackBox
         w = msg[:wid]
         j = msg[:jid] || msg['jid']
 
-        pid << "#{rc}/#{digest_color_bold(t)}T-#{t}" if t
-        pid << "#{rc}/#{digest_color_bold(w)}W-#{w}" if w
-        pid << "#{rc}/#{digest_color_bold(j)}J-#{j}" if j
+        pid << "#{rc}/#{find_color(nil, t)}T-#{t}" if t
+        pid << "#{rc}/#{find_color(nil, w)}W-#{w}" if w
+        pid << "#{rc}/#{find_color(nil, j)}J-#{j}" if j
 
         tags = msg[:tags] if msg[:tags].is_a?(Array)
         host = msg[:host] if msg[:host].is_a?(String)
         env = msg[:env] if msg[:env]
       end
 
-      hc = "\e[1m#{digest_color(host)}"
+      hc = find_color(:host, host)
 
       "#{sc}#{severity[0..0]}#{rc}, [#{dc}#{format_datetime(datetime)}#{pc}#{pid}#{rc}] #{sc}#{severity[0..4]}" +
         "#{rc} -- #{ac}#{progname}#{env && " #{ec}(#{env})"}#{rc}: #{hc}#{host}#{rc} #{self.class.format_tags(tags)}" +
@@ -121,79 +162,28 @@ module BlackBox
     end
 
     protected
-    # FIXME: These would be more efficient as constant arrays
-    def severity_color(severity)
-      case severity
-      when 'DEBUG'
-        "\e[1;30m"
-      when 'INFO'
-        "\e[1;34m"
-      when 'WARN'
-        "\e[1;33m"
-      when 'ERROR'
-        "\e[1;31m"
-      when 'FATAL'
-        "\e[1;35m"
-      else
-        "\e[1;36m"
-      end
-    end
+    # Returns the +type+ entry from the COLORS hash if @color is true.  If the
+    # entry found is a Hash, returns the +param+ entry in that Hash.  In either
+    # case, if the entry isn't found in the Hash, returns the value assigned to
+    # the nil key, if any.  If the final entry responds to :call, it will be
+    # called with the +param+
+    def find_color(type, param=nil)
+      return nil unless @color
 
-    def message_color(severity)
-      case severity
-      when 'DEBUG'
-        "\e[1;30m"
-      when 'INFO'
-        "\e[0m"
-      when 'WARN'
-        "\e[0;33m"
-      when 'ERROR'
-        "\e[0;31m"
-      when 'FATAL'
-        "\e[0;35m"
-      else
-        "\e[0;36m"
-      end
-    end
+      @cache.getset([type, param]) do
+        c = COLORS[type] || COLORS[nil]
+        if c.is_a?(Hash)
+          c = c[param] || c[nil]
+        end
 
-    def date_color(severity)
-      "\e[0;36m"
-    end
+        c = c.call(param) if c.respond_to?(:call)
 
-    def process_color(severity)
-      return @pidcol if @pidcol
-      @pidcol = "\e[0m#{digest_color($$)}"
-    end
-
-    def appname_color(severity, progname)
-      return @appcol if @appcol && @appname == progname
-      @appname = progname
-      @appcol = "\e[1m#{digest_color(@appname)}"
-    end
-
-    def env_color(progname)
-      return @envcol if @envcol && @appname == progname
-      @appname = progname
-      @envcol = "\e[0m#{digest_color(@appname)}"
-    end
-
-    # Returns a color escape based on the digest of the given +value+.
-    def digest_color(value)
-      "\e[#{31 + digest(value) % 6}m"
-    end
-
-    # Returns a reset, bold, and color escape based on the +value+.
-    def digest_color_bold(value)
-      color = digest(value) % 15 + 1
-      if color > 7
-        "\e[0;1;#{30 + color - 8}m"
-      else
-        "\e[0;#{30 + color}m"
+        c
       end
     end
 
     # Returns an integer based on the MD5 digest of the given +value+.
-    def digest(value)
+    def self.digest(value)
       digest = Digest::MD5.digest(value.to_s).unpack('I*')
       digest[0] ^ digest[1] ^ digest[2] ^ digest[3]
     end
