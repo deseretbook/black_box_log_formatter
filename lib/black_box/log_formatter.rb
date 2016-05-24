@@ -53,6 +53,34 @@ module BlackBox
       },
     }
 
+    # TODO: better location names
+    METADATA = {
+      pid: {
+        location: :inline,
+        prefix: nil,
+      },
+      tid: {
+        location: :inline,
+        prefix: 'T-',
+      },
+      wid: {
+        location: :inline,
+        prefix: 'W-',
+      },
+      jid: {
+        location: :inline,
+        prefix: 'J-',
+      },
+      progname: {
+        location: :middle,
+        prefix: nil,
+      },
+      host: {
+        location: :prefix,
+        prefix: nil,
+      },
+    }
+
     # Whether to highlight log lines in color.
     attr_accessor :color
 
@@ -64,7 +92,7 @@ module BlackBox
     # If +color+ is true or false (instead of nil), then color will be
     # enabled or disabled regardless of the attached logger's target or the
     # TERM environment variable.
-    def initialize(logger: nil, color: nil)
+    def initialize(logger: nil, color: nil, metadata: nil)
       @cache = LruRedux::Cache.new(50)
 
       @color = color == true || (
@@ -72,6 +100,12 @@ module BlackBox
         (!logger || !logger.instance_variable_get(:@filename)) &&
         !!(ENV['TERM'].to_s.downcase =~ /(linux|mac|xterm|ansi|putty|screen)/)
       )
+
+      @metadata = METADATA
+      @metadata = @metadata.merge(metadata) if metadata.is_a?(Hash)
+      @metadata = Hash[@metadata.group_by{|k, v| v[:location] }.map{|k, v| [k, Hash[v]] }]
+
+      ap @metadata
 
       AwesomePrint.force_colors! if Kernel.const_defined?(:AwesomePrint) && @color
     end
@@ -89,6 +123,12 @@ module BlackBox
       host = Socket.gethostname
       env = nil
       tags = nil
+
+      inline = []
+      @metadata[:inline].each do |name, meta|
+        next unless msg.include?(name)
+        inline << "#{meta[:prefix]}#{find_color(name, msg[name])}#{msg[name]}"
+      end
 
       if msg.is_a?(Hash)
         t = msg[:tid]
